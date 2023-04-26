@@ -1,0 +1,255 @@
+---
+title: "MAT 272: Final Project"
+author: "Shane Fabbri & Anthony J. Mercure"
+date: "`r Sys.Date()`"
+output:
+  pdf_document: default
+  html_document: default
+  word_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# **Introduction of Data Set & Data Variables**
+
+  - Source: https://www.kaggle.com/datasets/flashgordon/usa-airport-dataset
+
+```{r}
+flights <- read.csv("Airports2.csv", header = TRUE)
+```
+
+```{r}
+head(flights)
+```
+
+```{r}
+str(flights)
+```
+  - Origin_airport: Three letter airport code of the origin airport
+  - Destination_airport: Three letter airport code of the destination airport
+  - Origin_city: Origin city name
+  - Destination_city: Destination city name
+  - Passengers: Number of passengers transported from origin to destination
+  - Seats: Number of seats available on flights from origin to destination
+  - Flights: Number of flights between origin and destination (multiple records for one month, many with flights > 1)
+  - Distance: Distance (to nearest mile) flown between origin and destination
+  - Fly_date: The date (yyyymm) of flight
+  - Origin_population: Origin city's population as reported by US Census
+  - Destination_population: Destination city's population as reported by US Census
+  - Org_airport_lat: Origin city's latitude
+  - Org_airport_long: Origin city's longitude
+  - Dest_airport_lat: Destination city's latitude
+  - Dest_airport_long: Destination city's longitude
+  
+```{r}
+dim(flights)
+```
+  - Air transportation plays a crucial role in the modern world, facilitating the movement of people and goods across vast distances, promoting economic growth, and connecting cities and countries. Understanding patterns and trends in air travel can provide insights into the needs and preferences of travelers, as well as inform decision-making for airline companies, airports, and policymakers. In this project, we aim to analyze a comprehensive dataset on domestic flights within the United States between 1990 and 2009 to explore various aspects of air travel and convey meaningful information to a general audience.
+  Our primary research goal is to identify trends and relationships among the variables in the dataset, which could provide valuable insights into the factors that influence air travel patterns in the United States. We are particularly interested in examining the relationships between the number of passengers, flights, seats, and distances, as well as the impact of city population on these variables. We hypothesize that larger cities with higher populations are likely to have more flights, passengers, and seats, and that the distance between cities might also influence these numbers.
+  By analyzing this data and presenting our findings in a clear and understandable manner, we hope to convey valuable information to a general audience, ultimately contributing to a better understanding of the complex dynamics of air travel in the United States.
+
+
+
+
+# **Data Cleaning**
+
+## Missing Values
+
+```{r}
+colSums(is.na(flights))
+```
+
+```{r}
+airports <- na.omit(flights)
+```
+
+```{r}
+colSums(is.na(airports))
+```
+
+```{r}
+library(dplyr)
+airports <- arrange(airports, Fly_date)
+airports$Fly_date <- as.integer(format(as.Date(airports$Fly_date), "%Y%m%d"))
+```
+
+
+
+
+
+# **Descriptive Statistics & Data Visualization**
+```{r}
+head(airports)
+tail(airports)
+```
+
+```{r}
+library(ggplot2)
+library(dplyr)
+airdests <- aggregate(airports$Passengers, list(airports$Destination_airport), sum)
+airdests <- arrange(airdests, desc(x))
+colnames(airdests) <- c("Airport", "Total_Passengers")
+airdests
+```
+
+```{r}
+ggplot(head(airdests), aes(Airport, Total_Passengers)) + 
+  geom_bar(stat="identity", width=.5, fill="maroon")
+```
+
+```{r}
+ggplot(airports, aes(Origin_airport, Passengers)) +
+  geom_point()
+```
+```{r}
+ggplot(airports, aes(x=Passengers)) +
+  geom_histogram(binwidth = 500) +
+  xlim(c(0,20000)) +
+  ylim(c(0,500000))
+```
+
+
+
+
+# **Estimating Population Mean**
+## Hypothesis on Number of Passengers Flying
+```{r}
+passengers <- airports$Passengers
+print(paste("Mean of Number of Passengers Flying:", mean(passengers)))
+
+samp_passengers <- rnorm(1000000, mean = mean(passengers), sd = sd(passengers))
+print(paste("Mean of Random Sample of Number of Passengers Flying:", mean(samp_passengers)))
+```
+ -     Null hypothesis: $H_0$: $\mu =\ 2697$ 
+ 
+ -     Alternate hypothesis: $H_1$: $\mu \neq\ 2697$ 
+```{r}
+n<-length(passengers)
+x_bar<-mean(samp_passengers)
+s<-sd(passengers)
+mu<-mean(passengers)
+alpha<-0.05
+z_test_right<-(x_bar-mu)/(s/(n**0.5))
+z_test_left<-z_test_right*-1
+df<-(n-1)
+p_value <- 2*(1-pt(z_test_left, df))
+print(paste("P-Value Approach:", p_value, ">", alpha))
+```
+Conclusion: The p-value fails to support the rejection of the null hypothesis. There is insufficient evidence to support the claim of the alternate hypothesis that the average number of passengers flying are different from the sample.  
+
+
+
+## Hypothesis on Origin City Population
+```{r}
+oripop <- airports$Origin_population
+print(paste("Mean of Origin City Population:", mean(oripop)))
+
+destpop <- airports$Destination_population
+print(paste("Mean of Destination City Population:", mean(destpop)))
+```
+
+ -     Null hypothesis: $H_0: \mu_\text{origin} =\ \mu_\text{destination} $
+
+ -     Alternate hypothesis: $H_1: \mu_\text{origin} <\ \mu_\text{destination} $
+```{r}
+mu1<-mean(oripop)
+n1<-length(oripop)
+x_bar1<-mean(oripop)
+s1<-sd(oripop)
+
+mu2<-mean(destpop)
+n2<-length(destpop)
+x_bar2<-mean(destpop)
+s2<-sd(destpop)
+
+point_est<- x_bar2-x_bar1
+
+alpha<-1/100
+z_alpha2<-qnorm(1-(alpha/2), 0, 1)
+print(paste("Z Alpha/2:", z_alpha2))
+
+Error<-z_alpha2*( ( ( (s1**2)/n1 ) + ( (s2**2)/n2 ) )**0.5 )
+print(paste("Error:", Error))
+
+lower<-point_est-Error
+upper<-point_est+Error
+print(paste(lower, "< mu <", upper))
+
+df<-((n1-1)*(n2-1))
+z<-point_est/((((s1**2)/n1)+((s2**2)/n2))**0.5)
+print(paste("Z-Score:", z))
+p_value<- 1-pt(z, df)
+print(paste(p_value, "<", alpha))
+```
+Conclusion: The p-value is less than the significance interval, thus the null hypothesis is rejected, with sufficient evidence to support the alternate hypothesis that destination city population is greater than that of the origin city.
+
+
+
+## Hypothesis on Number of Flights & Distance
+
+## Hypothesis on number of Passengers in 1990 & 2009
+
+
+
+
+# **Regression Models**
+## Factorizing Variables
+```{r}
+airports_fact <- airports
+airports_fact$Origin_airport <- factor(airports_fact$Origin_airport)
+airports_fact$Origin_airport <- as.integer(airports_fact$Origin_airport)
+airports_fact$Destination_airport <- factor(airports_fact$Destination_airport)
+airports_fact$Destination_airport <- as.integer(airports_fact$Destination_airport)
+airports_fact$Origin_city <- factor(airports_fact$Destination_airport)
+airports_fact$Origin_city <- as.integer(airports_fact$Origin_city)
+airports_fact$Destination_city <- factor(airports_fact$Destination_city)
+airports_fact$Destination_city <- as.integer(airports_fact$Destination_city)
+airports_fact$Fly_date <- factor(airports_fact$Fly_date)
+airports_fact$Fly_date <- as.integer(airports_fact$Fly_date)
+head(airports_fact)
+```
+
+
+## Correlation of Airports Dataset Variables
+```{r}
+airports_corr <- cor(airports_fact)
+airports_corr
+```
+      
+ -     Null hypothesis: $H_0$: Correlation of Passengers and Seats $= 0$ 
+
+ -     Alternate Hypothesis ($H_1$): Correlation of Passengers and Seats $\neq 0$
+```{r}
+psng <- airports_fact[,5]
+seats <- airports_fact[,6]
+r <- cor(psng, seats)
+print(paste("R-Value:", r))
+df <- (length(mpg)) - 2
+t <- r*((df/(1-(r**2)))**0.5)
+print(paste("T test statistic:", t))
+p_value <- 2*(1-pt(t, df))
+print(paste("P-Value:", p_value))
+alpha <- 0.05/100
+print(paste(p_value, "<", alpha))
+```
+Conclusion: The p-value is less than the significance interval, thus the null hypothesis is rejected, with sufficient evidence to support the alternate hypothesis that there is a correlation between the number of passengers and number of sights on flights.
+
+```{r}
+attach(airports_fact)
+```
+```{r}
+lm.seats <- lm(Passengers~Seats)
+summary(lm.seats)
+```
+```{r}
+lm.flights <- lm(Passengers~Flights)
+summary(lm.flights)
+```
+```{r}
+lm.seats_flights <- lm(Passengers~Seats + Flights)
+summary(lm.seats_flights)
+```
+
+
